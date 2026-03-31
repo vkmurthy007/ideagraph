@@ -1,0 +1,9 @@
+/* src/components/Graph/GraphNode.module.css */
+
+.node {
+  transition: opacity 0.28s ease;
+}
+
+.node:hover {
+  filter: brightness(1.15);
+}
