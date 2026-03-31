@@ -18,11 +18,11 @@ interface Props {
 }
 
 const VARIANT_CONFIG: Record<StyleVariant, { fill: string; stroke: string; opacity: number; textOpacity: number }> = {
-  default:    { fill: '#1a1a1a', stroke: '#2e2e2e',  opacity: 1.00, textOpacity: 0.85 },
-  unresolved: { fill: '#141414', stroke: '#202020',  opacity: 0.55, textOpacity: 0.45 },
-  stable:     { fill: '#1a2d22', stroke: '#2d5a3d',  opacity: 1.00, textOpacity: 0.90 },
-  uncertain:  { fill: '#2a2415', stroke: '#5a4a1a',  opacity: 0.80, textOpacity: 0.75 },
-  fragile:    { fill: '#2a1515', stroke: '#5a1a1a',  opacity: 0.48, textOpacity: 0.55 },
+  default:    { fill: '#2a2a2a', stroke: '#555555',  opacity: 1.00, textOpacity: 1.0  },
+  unresolved: { fill: '#1e1e1e', stroke: '#383838',  opacity: 0.7,  textOpacity: 0.6  },
+  stable:     { fill: '#1a3324', stroke: '#3a8a55',  opacity: 1.00, textOpacity: 1.0  },
+  uncertain:  { fill: '#332d10', stroke: '#8a6e1a',  opacity: 0.85, textOpacity: 0.9  },
+  fragile:    { fill: '#331414', stroke: '#8a2222',  opacity: 0.55, textOpacity: 0.7  },
 };
 
 export function GraphNode({
@@ -36,17 +36,12 @@ export function GraphNode({
   const isPrimary   = node.type === 'primary';
   const isSecondary = node.type === 'secondary';
 
-  // Pulse animation for expanding state
-  const pulseAnim = isExpanding
-    ? { scale: [1, 1.08, 1], transition: { duration: 1.1, repeat: Infinity } }
-    : {};
-
   return (
     <motion.g
       layoutId={node.id}
       transform={`translate(${position.x}, ${position.y})`}
       initial={{ scale: 0.4, opacity: 0 }}
-      animate={{ scale: 1, opacity: vc.opacity, ...pulseAnim }}
+      animate={{ scale: 1, opacity: vc.opacity }}
       exit={{ scale: 0.3, opacity: 0, transition: { duration: 0.18 } }}
       transition={{
         type: 'spring',
@@ -64,96 +59,94 @@ export function GraphNode({
       {/* Root accent rings */}
       {isRoot && (
         <>
-          <motion.circle r={r + 12} fill="none" stroke="#c8a96e" strokeWidth={0.4} opacity={0.12}
+          <motion.circle r={r + 12} fill="none" stroke="#c8a96e" strokeWidth={0.5} opacity={0.3}
             animate={{ r: [r + 12, r + 16, r + 12] }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
           />
-          <circle r={r + 6} fill="none" stroke="#c8a96e" strokeWidth={0.6} opacity={0.2} />
+          <circle r={r + 6} fill="none" stroke="#c8a96e" strokeWidth={0.8} opacity={0.35} />
         </>
       )}
 
-      {/* Hover glow ring */}
+      {/* Hover glow */}
       {isHovered && isSecondary && (
-        <motion.circle r={r + 11} fill="none" stroke={bc} strokeWidth={1}
+        <motion.circle r={r + 11} fill="none" stroke={bc} strokeWidth={1.5}
           initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 0.35, scale: 1 }}
+          animate={{ opacity: 0.5, scale: 1 }}
           transition={{ duration: 0.15 }}
         />
       )}
 
       {/* Expanded indicator ring */}
       {isExpanded && (
-        <circle r={r + 5} fill="none" stroke={bc} strokeWidth={0.8}
-          strokeDasharray="3 3" opacity={0.5} />
+        <circle r={r + 5} fill="none" stroke={bc} strokeWidth={1}
+          strokeDasharray="3 3" opacity={0.6} />
       )}
 
       {/* Node body */}
       <circle
         r={r}
         fill={vc.fill}
-        stroke={isRoot ? '#c8a96e' : isPrimary ? bc + 'aa' : vc.stroke}
-        strokeWidth={isRoot ? 1.5 : isPrimary ? 1.1 : 0.8}
+        stroke={isRoot ? '#c8a96e' : isPrimary ? bc : vc.stroke}
+        strokeWidth={isRoot ? 2 : isPrimary ? 1.5 : 1}
       />
 
-      {/* Branch color accent dot — secondary only */}
+      {/* Branch color accent dot */}
       {isSecondary && (
-        <circle r={2.5} cx={r - 4} cy={-r + 4} fill={bc} opacity={0.75} />
+        <circle r={3} cx={r - 5} cy={-r + 5} fill={bc} opacity={0.9} />
       )}
 
       {/* Speculative dashed ring */}
-      {node.isSpeculative && !isExpanded && (
-        <circle r={r} fill="none" stroke="rgba(255,255,255,0.07)"
+      {node.isSpeculative && (
+        <circle r={r} fill="none" stroke="rgba(255,255,255,0.15)"
           strokeWidth={1} strokeDasharray="2.5 2.5" />
       )}
 
-      {/* Expanding spinner arc */}
+      {/* Expanding spinner */}
       {isExpanding && (
         <motion.circle
-          r={r + 2} fill="none" stroke={bc} strokeWidth={1.2}
-          strokeDasharray={`${(r + 2) * 2 * Math.PI * 0.3} ${(r + 2) * 2 * Math.PI * 0.7}`}
+          r={r + 3} fill="none" stroke={bc} strokeWidth={1.5}
+          strokeDasharray={`${(r + 3) * 2 * Math.PI * 0.3} ${(r + 3) * 2 * Math.PI * 0.7}`}
           strokeLinecap="round"
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           style={{ transformOrigin: '0 0' }}
-          opacity={0.7}
+          opacity={0.8}
         />
       )}
 
-      {/* Click affordance "+" for expandable nodes */}
+      {/* "+" expand affordance */}
       {isSecondary && !isExpanded && !isExpanding && isHovered && (
         <motion.text
-          x={r - 1} y={-r + 1}
+          x={r - 1} y={-r + 2}
           textAnchor="middle" dominantBaseline="middle"
-          fontSize={8} fontWeight={300}
-          fill={bc} opacity={0.8}
-          initial={{ opacity: 0 }} animate={{ opacity: 0.8 }}
+          fontSize={9} fontWeight={400}
+          fill={bc} opacity={0.9}
+          initial={{ opacity: 0 }} animate={{ opacity: 0.9 }}
           transition={{ duration: 0.15 }}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          +
-        </motion.text>
+        >+</motion.text>
       )}
 
       {/* Title */}
       <text
         textAnchor="middle"
         dy={isSecondary ? '0.35em' : '-0.1em'}
-        fontSize={isRoot ? 11 : isPrimary ? 10 : 9}
+        fontSize={isRoot ? 12 : isPrimary ? 11 : 9.5}
         fontWeight={isRoot ? 600 : isPrimary ? 500 : 400}
         fontFamily="Inter, system-ui, sans-serif"
-        fill={isRoot ? '#e8e8e8' : `rgba(200,200,200,${vc.textOpacity})`}
+        fill={isRoot ? '#ffffff' : isPrimary ? '#e0e0e0' : `rgba(220,220,220,${vc.textOpacity})`}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {truncate(node.title, isRoot ? 24 : 16)}
       </text>
 
-      {/* Insight — secondary, on hover */}
+      {/* Insight on hover */}
       {isSecondary && isHovered && node.insight && (
         <motion.text
-          textAnchor="middle" dy="1.7em"
-          fontSize={7.5} fontWeight={300}
+          textAnchor="middle" dy="1.8em"
+          fontSize={8} fontWeight={300}
           fontFamily="Inter, system-ui, sans-serif"
-          fill="rgba(190,190,190,0.6)"
+          fill="rgba(210,210,210,0.75)"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           transition={{ duration: 0.18 }}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
