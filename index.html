@@ -1,14 +1,687 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IdeaGraph — reveal the structure of an idea</title>
-    <meta name="description" content="An interactive environment that expands a product idea into its underlying structure and shows how it behaves under real-world constraints." />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IdeaGraph — reveal the structure of an idea</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a14;
+    color: #e0e0f0;
+    font-family: Inter, system-ui, sans-serif;
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Input screen ── */
+  #input-screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 100; background: #0a0a14;
+    transition: opacity 0.5s ease;
+  }
+  #input-screen.hidden { opacity: 0; pointer-events: none; }
+
+  .wordmark {
+    position: absolute; top: 24px; left: 28px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 600; letter-spacing: 3px;
+    color: rgba(200,169,110,0.8); text-transform: uppercase;
+  }
+  .wordmark-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #c8a96e; opacity: 0.8;
+  }
+
+  .input-wrap { width: 100%; max-width: 540px; padding: 0 28px; }
+
+  .input-label {
+    text-align: center; margin-bottom: 36px;
+    font-size: 9px; letter-spacing: 3px; font-weight: 600;
+    color: rgba(200,169,110,0.5); text-transform: uppercase;
+    font-family: monospace; margin-bottom: 12px;
+  }
+  .input-heading {
+    text-align: center; margin-bottom: 40px;
+    font-size: 26px; font-weight: 300;
+    color: rgba(228,228,245,0.92); letter-spacing: -0.3px; line-height: 1.35;
+  }
+
+  .input-box {
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03);
+    display: flex; align-items: center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .input-box:focus-within {
+    border-color: rgba(200,169,110,0.5);
+    box-shadow: 0 0 0 3px rgba(200,169,110,0.07);
+  }
+  .input-box input {
+    flex: 1; background: transparent; border: none; outline: none;
+    padding: 15px 18px; font-size: 14px; font-weight: 300;
+    font-family: Inter, sans-serif; color: #e0e0f0; letter-spacing: 0.1px;
+  }
+  .input-box input::placeholder { color: rgba(180,180,200,0.4); }
+  .input-btn {
+    margin: 7px 8px; padding: 9px 22px; border-radius: 6px;
+    border: none; background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.25); font-size: 11px; font-weight: 700;
+    letter-spacing: 1px; font-family: Inter, sans-serif;
+    cursor: default; text-transform: uppercase;
+    transition: all 0.2s ease;
+  }
+  .input-btn.ready {
+    background: #c8a96e; color: #0a0a14; cursor: pointer;
+    box-shadow: 0 2px 16px rgba(200,169,110,0.35);
+  }
+  .input-btn.ready:hover { background: #d4b87a; }
+
+  .examples {
+    margin-top: 20px; display: flex; flex-wrap: wrap;
+    gap: 7px; justify-content: center;
+  }
+  .ex-btn {
+    padding: 5px 13px; border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.02);
+    color: rgba(180,180,200,0.45); font-size: 10.5px;
+    font-family: Inter, sans-serif; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .ex-btn:hover {
+    border-color: rgba(200,169,110,0.3);
+    color: rgba(200,169,110,0.8);
+    background: rgba(200,169,110,0.06);
+  }
+  .input-hint {
+    text-align: center; margin-top: 38px;
+    font-size: 10px; color: rgba(255,255,255,0.16);
+    letter-spacing: 0.5px; font-family: monospace;
+  }
+
+  /* ── Graph screen ── */
+  #graph-screen {
+    position: fixed; inset: 0; opacity: 0;
+    transition: opacity 0.5s ease; pointer-events: none;
+  }
+  #graph-screen.visible { opacity: 1; pointer-events: auto; }
+
+  #graph-svg { width: 100%; height: 100%; }
+
+  /* Stress bar */
+  #stress-bar {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 3px;
+    background: rgba(8,8,20,0.88);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 5px 6px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    z-index: 50;
+  }
+  .stress-label {
+    font-size: 8px; font-weight: 600; letter-spacing: 1.5px;
+    color: rgba(255,255,255,0.2); font-family: monospace;
+    text-transform: uppercase; padding: 0 8px 0 4px;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    margin-right: 3px;
+  }
+  .stress-btn {
+    padding: 4px 12px; border-radius: 5px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: rgba(190,190,215,0.55); font-size: 10.5px;
+    font-weight: 400; font-family: Inter, sans-serif;
+    cursor: pointer; transition: all 0.15s ease; letter-spacing: 0.2px;
+  }
+  .stress-btn.active {
+    border-color: rgba(200,169,110,0.6);
+    background: rgba(200,169,110,0.15);
+    color: #f5e6c8; font-weight: 600;
+  }
+  .stress-btn:hover:not(.active) {
+    color: rgba(220,220,235,0.8);
+    background: rgba(255,255,255,0.05);
+  }
+
+  /* Collapse button */
+  #collapse-btn {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    padding: 9px 28px; border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.04);
+    color: rgba(210,210,225,0.8); font-size: 11px; font-weight: 500;
+    letter-spacing: 1.5px; font-family: Inter, sans-serif;
+    cursor: pointer; text-transform: uppercase;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.4);
+    transition: all 0.2s ease; z-index: 50;
+  }
+  #collapse-btn:hover {
+    border-color: rgba(200,169,110,0.45);
+    color: #f5e6c8;
+    box-shadow: 0 2px 20px rgba(200,169,110,0.15);
+  }
+
+  /* New idea button */
+  #new-idea-btn {
+    position: fixed; top: 24px; right: 28px;
+    background: transparent; border: none;
+    color: rgba(150,150,175,0.4); font-size: 11px;
+    font-family: Inter, sans-serif; cursor: pointer;
+    letter-spacing: 0.5px; transition: color 0.2s ease; z-index: 50;
+  }
+  #new-idea-btn:hover { color: rgba(200,200,220,0.7); }
+
+  /* Tooltip */
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 200;
+    max-width: 272px; display: none;
+  }
+  #tooltip.visible { display: block; }
+  .tooltip-inner {
+    background: rgba(8,8,20,0.97);
+    border-radius: 7px; padding: 10px 14px;
+    box-shadow: 0 4px 28px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+    backdrop-filter: blur(14px);
+  }
+  .tooltip-tag {
+    font-size: 8.5px; font-weight: 700; letter-spacing: 1.5px;
+    font-family: monospace; text-transform: uppercase; margin-bottom: 6px;
+  }
+  .tooltip-text {
+    font-size: 11.5px; font-weight: 300; line-height: 1.55;
+    font-family: Inter, sans-serif; color: rgba(218,208,195,0.92);
+    letter-spacing: 0.1px;
+  }
+
+  /* Reality check */
+  #reality-check {
+    position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+    z-index: 50; pointer-events: none; text-align: center; max-width: 520px;
+    padding: 12px 24px;
+    background: rgba(8,8,20,0.92);
+    border: 1px solid rgba(200,169,110,0.22);
+    border-radius: 8px; backdrop-filter: blur(14px);
+    display: none;
+  }
+  #reality-check.visible { display: block; }
+  .reality-tag {
+    font-size: 8.5px; font-weight: 700; letter-spacing: 2px;
+    color: rgba(200,169,110,0.45); font-family: monospace;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .reality-text {
+    font-size: 13px; font-weight: 300; line-height: 1.6;
+    color: rgba(200,185,155,0.9); font-family: Inter, sans-serif;
+    letter-spacing: 0.1px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Input Screen -->
+<div id="input-screen">
+  <div class="wordmark">
+    <div class="wordmark-dot"></div>
+    IdeaGraph
+  </div>
+  <div class="input-wrap">
+    <p class="input-label">Product Idea Explorer</p>
+    <h1 class="input-heading">What are you thinking<br>of building?</h1>
+    <div class="input-box">
+      <input id="idea-input" type="text"
+        placeholder="e.g. AI agent for dermatology diagnosis across skin tones"
+        autocomplete="off" />
+      <button class="input-btn" id="explore-btn">Map it</button>
+    </div>
+    <div class="examples">
+      <button class="ex-btn">AI triage tool for rural clinics</button>
+      <button class="ex-btn">B2B compliance platform for fintechs</button>
+      <button class="ex-btn">Peer tutoring app with AI matching</button>
+      <button class="ex-btn">Carbon tracker for SMB supply chains</button>
+    </div>
+    <p class="input-hint">reveals structure · maps dependencies · shows where it breaks</p>
+  </div>
+</div>
+
+<!-- Graph Screen -->
+<div id="graph-screen">
+  <svg id="graph-svg"></svg>
+
+  <div id="stress-bar">
+    <span class="stress-label">Stress</span>
+    <button class="stress-btn" data-dim="trust">Trust</button>
+    <button class="stress-btn" data-dim="scale">Scale</button>
+    <button class="stress-btn" data-dim="latency">Latency</button>
+    <button class="stress-btn" data-dim="retention">Retention</button>
+    <button class="stress-btn" data-dim="cost">Cost</button>
+    <button class="stress-btn" data-dim="regulation">Regulation</button>
+  </div>
+
+  <button id="collapse-btn">Collapse to Reality</button>
+  <button id="new-idea-btn">← new idea</button>
+
+  <div id="tooltip">
+    <div class="tooltip-inner">
+      <div class="tooltip-tag" id="tooltip-tag"></div>
+      <div class="tooltip-text" id="tooltip-text"></div>
+    </div>
+  </div>
+
+  <div id="reality-check">
+    <div class="reality-tag">Reality Check</div>
+    <div class="reality-text" id="reality-text"></div>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const BRANCH_COLORS = {
+  user:         '#60a5fa',
+  useCases:     '#34d399',
+  systemType:   '#f472b6',
+  value:        '#a78bfa',
+  risks:        '#f87171',
+  dependencies: '#fbbf24',
+};
+
+const SEED = {
+  nodes: [
+    { id:'root',  type:'root',    branch:'user',         title:'Derm Diagnosis Agent',   insight:'A system that reads skin — and the humans who distrust it', breakPoint:'', isSpeculative:false, stability:{trust:0.5,scale:0.6,latency:0.7,retention:0.5,cost:0.5,regulation:0.3} },
+    { id:'p-user',type:'primary', branch:'user',         title:'User',         insight:'', breakPoint:'', isSpeculative:false, stability:{trust:0.7,scale:0.7,latency:0.8,retention:0.6,cost:0.8,regulation:0.5} },
+    { id:'p-uc',  type:'primary', branch:'useCases',     title:'Use Cases',    insight:'', breakPoint:'', isSpeculative:false, stability:{trust:0.6,scale:0.6,latency:0.6,retention:0.6,cost:0.6,regulation:0.5} },
+    { id:'p-st',  type:'primary', branch:'systemType',   title:'System Type',  insight:'', breakPoint:'', isSpeculative:false, stability:{trust:0.5,scale:0.5,latency:0.5,retention:0.5,cost:0.5,regulation:0.5} },
+    { id:'p-val', type:'primary', branch:'value',        title:'Value',        insight:'', breakPoint:'', isSpeculative:false, stability:{trust:0.6,scale:0.7,latency:0.7,retention:0.6,cost:0.6,regulation:0.5} },
+    { id:'p-risk',type:'primary', branch:'risks',        title:'Risks',        insight:'', breakPoint:'', isSpeculative:false, stability:{trust:0.3,scale:0.4,latency:0.5,retention:0.4,cost:0.4,regulation:0.2} },
+    { id:'p-dep', type:'primary', branch:'dependencies', title:'Dependencies', insight:'', breakPoint:'', isSpeculative:false, stability:{trust:0.5,scale:0.4,latency:0.4,retention:0.5,cost:0.3,regulation:0.4} },
+    { id:'u-1', type:'secondary', branch:'user', title:'General patient',   insight:'Needs reassurance before results, not after',         breakPoint:'Breaks here: first output is wrong → user never returns',                          isSpeculative:false, stability:{trust:0.2,scale:0.8,latency:0.7,retention:0.3,cost:0.9,regulation:0.4} },
+    { id:'u-2', type:'secondary', branch:'user', title:'Clinician',         insight:'Requires auditability, not just accuracy',             breakPoint:'Breaks here: no explanation for output → clinician cannot co-sign',                isSpeculative:false, stability:{trust:0.5,scale:0.7,latency:0.8,retention:0.7,cost:0.8,regulation:0.6} },
+    { id:'u-3', type:'secondary', branch:'user', title:'Underserved patient',insight:'Highest-value user is also hardest to reach',          breakPoint:'Breaks here: training data skews pale → model fails the intended user',           isSpeculative:true,  stability:{trust:0.2,scale:0.5,latency:0.6,retention:0.4,cost:0.7,regulation:0.5} },
+    { id:'uc-1',type:'secondary', branch:'useCases', title:'Diagnosis',      insight:'High stakes, zero tolerance for confident errors',    breakPoint:'Breaks here: false negative on melanoma → lawsuit and shutdown',                   isSpeculative:false, stability:{trust:0.1,scale:0.5,latency:0.6,retention:0.6,cost:0.6,regulation:0.1} },
+    { id:'uc-2',type:'secondary', branch:'useCases', title:'Triage support', insight:'Lower risk, faster decision — the survivable wedge',  breakPoint:'Breaks here: triage escalates incorrectly → clinician loses confidence',           isSpeculative:false, stability:{trust:0.6,scale:0.8,latency:0.7,retention:0.7,cost:0.7,regulation:0.5} },
+    { id:'uc-3',type:'secondary', branch:'useCases', title:'Education tool', insight:'Highest trust, lowest liability — real entry point',  breakPoint:'Breaks here: learners treat it as diagnostic truth → misuse compounds',            isSpeculative:false, stability:{trust:0.8,scale:0.9,latency:0.9,retention:0.8,cost:0.9,regulation:0.8} },
+    { id:'uc-4',type:'secondary', branch:'useCases', title:'Cosmetic recs',  insight:'Low stakes but monetizable — keeps lights on',        breakPoint:'Breaks here: product pushes to diagnosis-adjacent content → liability bleeds in',   isSpeculative:true,  stability:{trust:0.7,scale:0.9,latency:0.8,retention:0.8,cost:0.8,regulation:0.6} },
+    { id:'st-1',type:'secondary', branch:'systemType', title:'Autonomous agent',   insight:'Maximum capability, maximum liability surface', breakPoint:'Breaks here: autonomous output is wrong → no human in loop to catch it',           isSpeculative:true,  stability:{trust:0.1,scale:0.4,latency:0.3,retention:0.5,cost:0.2,regulation:0.1} },
+    { id:'st-2',type:'secondary', branch:'systemType', title:'Clinician copilot',  insight:'Human-in-loop keeps liability manageable',     breakPoint:'Breaks here: clinician rubber-stamps outputs → liability shifts without safety gain',isSpeculative:false, stability:{trust:0.7,scale:0.6,latency:0.6,retention:0.7,cost:0.5,regulation:0.7} },
+    { id:'st-3',type:'secondary', branch:'systemType', title:'Retrieval system',   insight:'Shows its work — most auditable form',         breakPoint:'Breaks here: retrieved references are outdated → confidence is misplaced',          isSpeculative:false, stability:{trust:0.8,scale:0.7,latency:0.5,retention:0.6,cost:0.6,regulation:0.8} },
+    { id:'v-1', type:'secondary', branch:'value', title:'Access parity',     insight:'Dermatology has 6-month wait — this collapses it',   breakPoint:'Breaks here: rural users lack smartphones → gap persists',                         isSpeculative:true,  stability:{trust:0.5,scale:0.8,latency:0.7,retention:0.7,cost:0.6,regulation:0.4} },
+    { id:'v-2', type:'secondary', branch:'value', title:'Faster triage',     insight:'Speed only matters if accuracy holds under pressure', breakPoint:'Breaks here: speed metric crowds out accuracy → wrong tradeoff',                    isSpeculative:false, stability:{trust:0.6,scale:0.8,latency:0.9,retention:0.7,cost:0.8,regulation:0.5} },
+    { id:'v-3', type:'secondary', branch:'value', title:'Bias correction',   insight:'Diverse training data is the actual differentiator',  breakPoint:'Breaks here: diversity claimed but not verified → differentiation is marketing',    isSpeculative:true,  stability:{trust:0.4,scale:0.6,latency:0.7,retention:0.6,cost:0.5,regulation:0.5} },
+    { id:'r-1', type:'secondary', branch:'risks', title:'Misdiagnosis',      insight:'Confident wrong answer is worse than no answer',      breakPoint:'Breaks here: high confidence on incorrect output → user acts on it',               isSpeculative:false, stability:{trust:0.1,scale:0.3,latency:0.5,retention:0.2,cost:0.5,regulation:0.1} },
+    { id:'r-2', type:'secondary', branch:'risks', title:'Trust collapse',    insight:'One visible failure poisons every future correct answer',breakPoint:'Breaks here: public misdiagnosis case → press coverage ends adoption curve',      isSpeculative:false, stability:{trust:0.1,scale:0.4,latency:0.6,retention:0.1,cost:0.6,regulation:0.3} },
+    { id:'r-3', type:'secondary', branch:'risks', title:'Regulatory exposure',insight:'FDA clears the device, not the company from liability',breakPoint:'Breaks here: deployed before FDA clearance → cease and desist before scale',      isSpeculative:false, stability:{trust:0.4,scale:0.4,latency:0.6,retention:0.4,cost:0.4,regulation:0.0} },
+    { id:'r-4', type:'secondary', branch:'risks', title:'Skin tone bias',    insight:'The population that needs this most is the one it fails',breakPoint:'Breaks here: bias discovered post-launch → reputational damage is irreversible',  isSpeculative:false, stability:{trust:0.2,scale:0.3,latency:0.5,retention:0.2,cost:0.5,regulation:0.2} },
+    { id:'d-1', type:'secondary', branch:'dependencies', title:'Diverse training data',  insight:'Without this the product is built on sand',       breakPoint:'Breaks here: dataset acquired but unlicensed → legal challenge shuts pipeline', isSpeculative:false, stability:{trust:0.4,scale:0.5,latency:0.6,retention:0.5,cost:0.3,regulation:0.3} },
+    { id:'d-2', type:'secondary', branch:'dependencies', title:'Clinical partnerships', insight:'Clinicians who endorse it become the trust mechanism', breakPoint:'Breaks here: clinician partner pulls endorsement → trust infrastructure collapses', isSpeculative:false, stability:{trust:0.6,scale:0.5,latency:0.7,retention:0.6,cost:0.6,regulation:0.7} },
+    { id:'d-3', type:'secondary', branch:'dependencies', title:'FDA clearance path',    insight:'Regulatory path determines product shape, not vice versa', breakPoint:'Breaks here: clearance requires clinical trials → 18-month delay kills runway', isSpeculative:false, stability:{trust:0.5,scale:0.4,latency:0.5,retention:0.5,cost:0.2,regulation:0.8} },
+    { id:'d-4', type:'secondary', branch:'dependencies', title:'Image quality baseline',insight:'Phone camera variation is a real model degradation vector', breakPoint:'Breaks here: trained on clinical images → degrades on consumer photos',         isSpeculative:false, stability:{trust:0.5,scale:0.6,latency:0.7,retention:0.6,cost:0.7,regulation:0.6} },
+  ],
+  edges: [
+    {s:'root',t:'p-user'},{s:'root',t:'p-uc'},{s:'root',t:'p-st'},{s:'root',t:'p-val'},{s:'root',t:'p-risk'},{s:'root',t:'p-dep'},
+    {s:'p-user',t:'u-1'},{s:'p-user',t:'u-2'},{s:'p-user',t:'u-3'},
+    {s:'p-uc',t:'uc-1'},{s:'p-uc',t:'uc-2'},{s:'p-uc',t:'uc-3'},{s:'p-uc',t:'uc-4'},
+    {s:'p-st',t:'st-1'},{s:'p-st',t:'st-2'},{s:'p-st',t:'st-3'},
+    {s:'p-val',t:'v-1'},{s:'p-val',t:'v-2'},{s:'p-val',t:'v-3'},
+    {s:'p-risk',t:'r-1'},{s:'p-risk',t:'r-2'},{s:'p-risk',t:'r-3'},{s:'p-risk',t:'r-4'},
+    {s:'p-dep',t:'d-1'},{s:'p-dep',t:'d-2'},{s:'p-dep',t:'d-3'},{s:'p-dep',t:'d-4'},
+    {s:'u-2', t:'r-1',  causal:true, label:'reveals'},
+    {s:'r-1', t:'r-2',  causal:true, label:'accelerates'},
+    {s:'r-2', t:'uc-1', causal:true, label:'blocks'},
+    {s:'d-1', t:'r-4',  causal:true, label:'undermines'},
+    {s:'d-2', t:'st-2', causal:true, label:'enables'},
+    {s:'d-3', t:'st-1', causal:true, label:'blocks'},
+    {s:'uc-3',t:'d-2',  causal:true, label:'enables'},
+    {s:'v-3', t:'d-1',  causal:true, label:'requires'},
+  ]
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let activeStress = null;
+let isCollapsed  = false;
+let simulation   = null;
+let currentIdea  = '';
+
+// ── Input screen logic ────────────────────────────────────────────────────────
+const ideaInput  = document.getElementById('idea-input');
+const exploreBtn = document.getElementById('explore-btn');
+
+ideaInput.addEventListener('input', () => {
+  const ready = ideaInput.value.trim().length >= 4;
+  exploreBtn.classList.toggle('ready', ready);
+});
+
+ideaInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && ideaInput.value.trim().length >= 4) launchGraph();
+});
+
+exploreBtn.addEventListener('click', () => {
+  if (ideaInput.value.trim().length >= 4) launchGraph();
+});
+
+document.querySelectorAll('.ex-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    ideaInput.value = btn.textContent;
+    exploreBtn.classList.add('ready');
+    ideaInput.focus();
+  });
+});
+
+function launchGraph() {
+  currentIdea = ideaInput.value.trim();
+  document.getElementById('input-screen').classList.add('hidden');
+  document.getElementById('graph-screen').classList.add('visible');
+  isCollapsed = false;
+  document.getElementById('reality-check').classList.remove('visible');
+  document.getElementById('collapse-btn').style.display = '';
+  buildGraph(SEED.nodes, SEED.edges);
+}
+
+document.getElementById('new-idea-btn').addEventListener('click', () => {
+  document.getElementById('input-screen').classList.remove('hidden');
+  document.getElementById('graph-screen').classList.remove('visible');
+  if (simulation) simulation.stop();
+  d3.select('#graph-svg').selectAll('*').remove();
+});
+
+// ── Stress bar ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.stress-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const dim = btn.dataset.dim;
+    if (activeStress === dim) {
+      activeStress = null;
+      btn.classList.remove('active');
+    } else {
+      document.querySelectorAll('.stress-btn').forEach(b => b.classList.remove('active'));
+      activeStress = dim;
+      btn.classList.add('active');
+    }
+    applyStress();
+  });
+});
+
+// ── Collapse to Reality ───────────────────────────────────────────────────────
+document.getElementById('collapse-btn').addEventListener('click', () => {
+  isCollapsed = true;
+  document.getElementById('collapse-btn').style.display = 'none';
+  document.getElementById('reality-check').classList.add('visible');
+  document.getElementById('reality-text').textContent =
+    'This is a clinician decision-support tool for triage, not an autonomous diagnosis agent.';
+
+  // Remove speculative nodes
+  const visible = SEED.nodes.filter(n => !n.isSpeculative);
+  const visIds  = new Set(visible.map(n => n.id));
+  const visEdges = SEED.edges.filter(e => visIds.has(e.s) && visIds.has(e.t));
+
+  d3.select('#graph-svg').selectAll('*').remove();
+  buildGraph(visible, visEdges);
+});
+
+// ── Graph builder ─────────────────────────────────────────────────────────────
+function buildGraph(nodes, edges) {
+  const svg    = d3.select('#graph-svg');
+  const W      = window.innerWidth;
+  const H      = window.innerHeight;
+
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+
+  const nodeMap = new Map(nodes.map(n => [n.id, {...n}]));
+
+  // Prep link data
+  const links = edges.map(e => ({
+    source: e.s, target: e.t,
+    causal: !!e.causal, label: e.label || ''
+  }));
+
+  // Root fixed at center
+  nodeMap.get('root').fx = W / 2;
+  nodeMap.get('root').fy = H / 2;
+
+  const nodesArr = [...nodeMap.values()];
+
+  simulation = d3.forceSimulation(nodesArr)
+    .force('link', d3.forceLink(links)
+      .id(d => d.id)
+      .distance(d => d.causal ? 200 : (d.source.type === 'root' || d.target.type === 'root' ? 120 : 110))
+      .strength(d => d.causal ? 0.1 : 0.5))
+    .force('charge', d3.forceManyBody().strength(-280))
+    .force('collision', d3.forceCollide(50))
+    .force('x', d3.forceX(W / 2).strength(0.04))
+    .force('y', d3.forceY(H / 2).strength(0.04))
+    .alphaDecay(0.025);
+
+  // Edges
+  const edgeG = svg.append('g').attr('class', 'edges');
+
+  const edgePaths = edgeG.selectAll('path')
+    .data(links).enter().append('path')
+    .attr('fill', 'none')
+    .attr('stroke-linecap', 'round')
+    .style('transition', 'stroke 0.3s, stroke-width 0.3s, opacity 0.3s');
+
+  // Edge labels (causal only)
+  const edgeLabels = edgeG.selectAll('.edge-label')
+    .data(links.filter(l => l.causal)).enter().append('text')
+    .attr('class', 'edge-label')
+    .attr('text-anchor', 'middle')
+    .attr('font-size', 8).attr('font-family', 'monospace')
+    .attr('fill', 'rgba(255,255,255,0.0)')
+    .style('pointer-events', 'none')
+    .style('user-select', 'none');
+
+  // Nodes
+  const nodeG = svg.append('g').attr('class', 'nodes');
+
+  const node = nodeG.selectAll('g')
+    .data(nodesArr).enter().append('g')
+    .attr('class', d => `node node-${d.type}`)
+    .style('cursor', d => d.type === 'secondary' ? 'pointer' : 'default')
+    .call(d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        if (d.type !== 'root') { d.fx = d.x; d.fy = d.y; }
+      })
+      .on('drag', (event, d) => {
+        if (d.type !== 'root') { d.fx = event.x; d.fy = event.y; }
+      })
+      .on('end', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0);
+        if (d.type !== 'root') { d.fx = null; d.fy = null; }
+      })
+    );
+
+  // Node circles
+  const R = { root: 30, primary: 19, secondary: 14 };
+
+  // Root outer pulse ring
+  node.filter(d => d.type === 'root').append('circle')
+    .attr('r', 50).attr('fill', 'none')
+    .attr('stroke', '#c8a96e').attr('stroke-width', 0.8).attr('opacity', 0.15)
+    .attr('class', 'pulse-ring');
+
+  node.filter(d => d.type === 'root').append('circle')
+    .attr('r', 40).attr('fill', 'none')
+    .attr('stroke', '#c8a96e').attr('stroke-width', 1).attr('opacity', 0.22);
+
+  // Main circle
+  node.append('circle')
+    .attr('r', d => R[d.type])
+    .attr('fill', d => {
+      if (d.type === 'root')    return '#1e1935';
+      if (d.type === 'primary') return '#181828';
+      return '#1c1c30';
+    })
+    .attr('stroke', d => d.type === 'root' ? '#c8a96e' : BRANCH_COLORS[d.branch])
+    .attr('stroke-width', d => d.type === 'root' ? 2.5 : d.type === 'primary' ? 2 : 1.5)
+    .attr('class', 'node-circle');
+
+  // Inner glow
+  node.append('circle')
+    .attr('r', d => R[d.type] * 0.5)
+    .attr('fill', d => d.type === 'root' ? 'rgba(200,169,110,0.1)' : BRANCH_COLORS[d.branch] + '20')
+    .style('pointer-events', 'none');
+
+  // Speculative dashes
+  node.filter(d => d.isSpeculative).append('circle')
+    .attr('r', d => R[d.type] + 3)
+    .attr('fill', 'none')
+    .attr('stroke', 'rgba(255,255,255,0.18)')
+    .attr('stroke-width', 1)
+    .attr('stroke-dasharray', '3 3')
+    .style('pointer-events', 'none');
+
+  // Title text
+  node.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => d.type === 'secondary' ? '0.38em' : '0.1em')
+    .attr('font-size', d => d.type === 'root' ? 12 : d.type === 'primary' ? 10 : 9)
+    .attr('font-weight', d => d.type === 'root' ? 700 : d.type === 'primary' ? 600 : 500)
+    .attr('font-family', 'Inter, system-ui, sans-serif')
+    .attr('fill', d => d.type === 'root' ? '#f5e6c8' : '#e8e8f8')
+    .style('pointer-events', 'none')
+    .style('user-select', 'none')
+    .text(d => trunc(d.title, d.type === 'root' ? 20 : 13));
+
+  // Tooltip interaction
+  const tooltip  = document.getElementById('tooltip');
+  const ttTag    = document.getElementById('tooltip-tag');
+  const ttText   = document.getElementById('tooltip-text');
+
+  node.filter(d => d.type === 'secondary')
+    .on('mouseenter', function(event, d) {
+      const bc = BRANCH_COLORS[d.branch];
+      ttTag.textContent = 'BREAK POINT';
+      ttTag.style.color = bc;
+      tooltip.querySelector('.tooltip-inner').style.borderLeft = `2px solid ${bc}`;
+      ttText.textContent = d.breakPoint || d.insight || d.title;
+      tooltip.classList.add('visible');
+
+      // Highlight connected edges
+      edgePaths.each(function(l) {
+        if (l.source.id === d.id || l.target.id === d.id) {
+          d3.select(this).attr('opacity', 1);
+          if (l.causal) {
+            d3.select(this).attr('stroke-width', 2).attr('stroke', bc);
+          }
+        }
+      });
+      edgeLabels.each(function(l) {
+        if (l.source.id === d.id || l.target.id === d.id) {
+          d3.select(this).attr('fill', bc).attr('opacity', 0.9);
+        }
+      });
+    })
+    .on('mousemove', function(event) {
+      tooltip.style.left = (event.clientX + 16) + 'px';
+      tooltip.style.top  = (event.clientY - 12) + 'px';
+    })
+    .on('mouseleave', function() {
+      tooltip.classList.remove('visible');
+      applyStress(); // restore stress state
+    });
+
+  // Tick
+  simulation.on('tick', () => {
+    edgePaths.attr('d', d => {
+      const sx = d.source.x, sy = d.source.y;
+      const tx = d.target.x, ty = d.target.y;
+      if (d.causal) {
+        const mx = (sx+tx)/2, my = (sy+ty)/2;
+        const dx = ty-sy, dy = sx-tx;
+        const len = Math.sqrt(dx*dx+dy*dy)||1;
+        return `M${sx},${sy} Q${mx+dx/len*45},${my+dy/len*45} ${tx},${ty}`;
+      }
+      return `M${sx},${sy} L${tx},${ty}`;
+    });
+
+    edgeLabels.attr('x', d => (d.source.x + d.target.x)/2)
+              .attr('y', d => (d.source.y + d.target.y)/2 - 5);
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  // Initial edge style
+  setTimeout(applyStress, 100);
+
+  // Animate pulse ring
+  function pulsate() {
+    svg.selectAll('.pulse-ring')
+      .transition().duration(2000).ease(d3.easeSinInOut)
+      .attr('r', 56).attr('opacity', 0.08)
+      .transition().duration(2000).ease(d3.easeSinInOut)
+      .attr('r', 48).attr('opacity', 0.18)
+      .on('end', pulsate);
+  }
+  pulsate();
+}
+
+// ── Apply stress overlay ──────────────────────────────────────────────────────
+function applyStress() {
+  const svg = d3.select('#graph-svg');
+
+  svg.selectAll('.node').each(function(d) {
+    const el = d3.select(this);
+    if (!activeStress || d.type !== 'secondary') {
+      el.select('.node-circle')
+        .attr('fill', d.type==='root' ? '#1e1935' : d.type==='primary' ? '#181828' : '#1c1c30')
+        .attr('stroke', d.type==='root' ? '#c8a96e' : BRANCH_COLORS[d.branch])
+        .attr('opacity', 1);
+      el.attr('opacity', 1);
+      return;
+    }
+    const score = d.stability[activeStress] ?? 0.5;
+    let fill, stroke, opacity;
+    if (score >= 0.7)      { fill='#0f3320'; stroke='#22c55e'; opacity=1.0; }
+    else if (score >= 0.4) { fill='#2d2100'; stroke='#ca8a04'; opacity=0.85; }
+    else                   { fill='#2d0f0f'; stroke='#dc2626'; opacity=0.5; }
+    el.select('.node-circle').attr('fill', fill).attr('stroke', stroke).attr('opacity', 1);
+    el.attr('opacity', opacity);
+  });
+
+  svg.selectAll('.edges path').each(function(d) {
+    const bc = BRANCH_COLORS[d.source.branch] || '#666';
+    if (!activeStress) {
+      d3.select(this)
+        .attr('stroke', d.causal ? bc+'66' : 'rgba(200,200,255,0.14)')
+        .attr('stroke-width', d.causal ? 1 : 0.8)
+        .attr('stroke-dasharray', null)
+        .attr('opacity', 0.9);
+      return;
+    }
+    const sScore = d.source.stability?.[activeStress] ?? 0.5;
+    const tScore = d.target.stability?.[activeStress] ?? 0.5;
+    const avg = (sScore + tScore) / 2;
+    const fragile = avg < 0.4;
+    d3.select(this)
+      .attr('stroke', d.causal ? bc+'88' : 'rgba(200,200,255,0.12)')
+      .attr('stroke-width', fragile ? 0.5 : d.causal ? 1.2 : 0.8)
+      .attr('stroke-dasharray', fragile ? '3 5' : null)
+      .attr('opacity', fragile ? 0.35 : 0.85);
+  });
+}
+
+function trunc(s, n) { return s.length <= n ? s : s.slice(0, n-1) + '…'; }
+
+window.addEventListener('resize', () => {
+  const svg = d3.select('#graph-svg');
+  const W = window.innerWidth, H = window.innerHeight;
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+  const root = svg.selectAll('.node').data().find(d => d.id === 'root');
+  if (root) { root.fx = W/2; root.fy = H/2; }
+  if (simulation) simulation.alpha(0.3).restart();
+});
+</script>
+</body>
 </html>
