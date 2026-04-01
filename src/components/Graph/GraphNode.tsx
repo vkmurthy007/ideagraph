@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { GraphNode as GraphNodeType, StyleVariant, NodePosition } from '../../lib/types';
-import { NODE_SIZE, BRANCH_COLORS, ANIMATION } from '../../lib/constants';
+import { BRANCH_COLORS, ANIMATION } from '../../lib/constants';
 
 interface Props {
   node: GraphNodeType;
@@ -15,117 +15,142 @@ interface Props {
   animationDelay?: number;
 }
 
-const VARIANT_STYLES: Record<StyleVariant, { fill: string; stroke: string; opacity: number }> = {
-  default:    { fill: '#1c1c28', stroke: '#4a4a6a',  opacity: 1.0  },
-  unresolved: { fill: '#141420', stroke: '#2a2a3a',  opacity: 0.6  },
-  stable:     { fill: '#0d2b1a', stroke: '#22c55e',  opacity: 1.0  },
-  uncertain:  { fill: '#2b2200', stroke: '#eab308',  opacity: 0.85 },
-  fragile:    { fill: '#2b0d0d', stroke: '#ef4444',  opacity: 0.5  },
+const VARIANT_OVERLAY: Record<StyleVariant, { border: string; bg: string; opacity: number }> = {
+  default:    { border: 'rgba(255,255,255,0.12)', bg: 'rgba(16,16,28,0.92)',   opacity: 1.0 },
+  unresolved: { border: 'rgba(255,255,255,0.05)', bg: 'rgba(10,10,18,0.7)',    opacity: 0.55 },
+  stable:     { border: '#22c55e',                bg: 'rgba(5,25,12,0.95)',    opacity: 1.0 },
+  uncertain:  { border: '#eab308',                bg: 'rgba(20,16,0,0.95)',    opacity: 0.88 },
+  fragile:    { border: '#ef4444',                bg: 'rgba(25,5,5,0.95)',     opacity: 0.5 },
+};
+
+const BRANCH_LABELS: Record<string, string> = {
+  user: 'USER', useCases: 'USE CASE', systemType: 'SYSTEM', value: 'VALUE', risks: 'RISK', dependencies: 'DEP',
 };
 
 export function GraphNode({ node, position, variant, isHovered, isExpanded, isExpanding, onHoverStart, onHoverEnd, onClick, animationDelay = 0 }: Props) {
-  const r  = NODE_SIZE[node.type];
-  const vs = VARIANT_STYLES[variant];
+  const ov = VARIANT_OVERLAY[variant];
   const bc = BRANCH_COLORS[node.branch];
   const isRoot      = node.type === 'root';
   const isPrimary   = node.type === 'primary';
   const isSecondary = node.type === 'secondary';
 
+  // Card dimensions
+  const w = isRoot ? 160 : isPrimary ? 100 : 120;
+  const h = isRoot ? 52  : isPrimary ? 32  : 44;
+
   return (
     <motion.g
-      transform={`translate(${position.x}, ${position.y})`}
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: vs.opacity }}
-      exit={{ scale: 0, opacity: 0 }}
+      transform={`translate(${position.x - w/2}, ${position.y - h/2})`}
+      initial={{ scale: 0.6, opacity: 0 }}
+      animate={{ scale: 1, opacity: ov.opacity }}
+      exit={{ scale: 0.4, opacity: 0 }}
       transition={{ type: 'spring', stiffness: ANIMATION.nodeEnter.stiffness, damping: ANIMATION.nodeEnter.damping, delay: animationDelay }}
       style={{ cursor: isSecondary ? 'pointer' : 'default' }}
       onHoverStart={onHoverStart}
       onHoverEnd={onHoverEnd}
       onClick={isSecondary ? onClick : undefined}
     >
-      {/* Root: glowing outer rings */}
-      {isRoot && <>
-        <motion.circle r={r + 18} fill="none" stroke="#c8a96e" strokeWidth={1} opacity={0.15}
-          animate={{ r: [r+18, r+24, r+18] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }} />
-        <circle r={r + 10} fill="none" stroke="#c8a96e" strokeWidth={1.5} opacity={0.3} />
-        <circle r={r + 4}  fill="none" stroke="#c8a96e" strokeWidth={1}   opacity={0.5} />
-      </>}
-
-      {/* Primary: branch color ring */}
-      {isPrimary && <circle r={r + 4} fill="none" stroke={bc} strokeWidth={1.5} opacity={0.4} />}
-
-      {/* Hover glow */}
+      {/* Hover / selected outer glow */}
       {isHovered && isSecondary && (
-        <motion.circle r={r + 14} fill={bc} opacity={0.1}
-          initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 0.12 }} />
+        <motion.rect x={-3} y={-3} width={w+6} height={h+6} rx={6}
+          fill="none" stroke={bc} strokeWidth={1}
+          initial={{ opacity: 0 }} animate={{ opacity: 0.5 }}
+          style={{ filter: `drop-shadow(0 0 6px ${bc})` }} />
       )}
 
-      {/* Expanded ring */}
-      {isExpanded && <circle r={r + 7} fill="none" stroke={bc} strokeWidth={1} strokeDasharray="4 3" opacity={0.7} />}
+      {/* Card background */}
+      <rect x={0} y={0} width={w} height={h} rx={4}
+        fill={ov.bg}
+        stroke={isRoot ? '#c8a96e' : isHovered && isSecondary ? bc : ov.border}
+        strokeWidth={isRoot ? 1.5 : isHovered ? 1.5 : 1} />
 
-      {/* Node body */}
-      <circle r={r} fill={vs.fill} stroke={isRoot ? '#c8a96e' : bc} strokeWidth={isRoot ? 2.5 : isPrimary ? 2 : 1.5} />
+      {/* Root: top accent bar */}
+      {isRoot && <rect x={0} y={0} width={w} height={3} rx={4} fill="#c8a96e" opacity={0.8} />}
 
-      {/* Inner fill highlight */}
-      <circle r={r * 0.6} fill={isRoot ? 'rgba(200,169,110,0.08)' : `${bc}15`} />
+      {/* Primary: left colored bar */}
+      {isPrimary && <rect x={0} y={0} width={3} height={h} rx={2} fill={bc} opacity={0.9} />}
 
-      {/* Speculative dashed overlay */}
-      {node.isSpeculative && <circle r={r} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={1} strokeDasharray="3 3" />}
+      {/* Secondary: branch tag top-right */}
+      {isSecondary && (
+        <text x={w - 5} y={10} textAnchor="end"
+          fontSize={6} fontWeight={600}
+          fontFamily="'SF Mono', 'Fira Code', monospace"
+          fill={bc} opacity={0.7} letterSpacing={0.5}>
+          {BRANCH_LABELS[node.branch] ?? node.branch.toUpperCase()}
+        </text>
+      )}
 
-      {/* Expanding spinner */}
+      {/* Speculative indicator */}
+      {node.isSpeculative && (
+        <rect x={0} y={0} width={w} height={h} rx={4}
+          fill="none" stroke="rgba(255,255,255,0.12)"
+          strokeWidth={1} strokeDasharray="4 3" />
+      )}
+
+      {/* Expanding spinner overlay */}
       {isExpanding && (
-        <motion.circle r={r + 4} fill="none" stroke={bc} strokeWidth={2}
-          strokeDasharray={`${(r+4)*2*Math.PI*0.25} ${(r+4)*2*Math.PI*0.75}`}
-          strokeLinecap="round" opacity={0.9}
-          animate={{ rotate: 360 }} transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-          style={{ transformOrigin: '0 0' }} />
+        <motion.rect x={0} y={0} width={w} height={h} rx={4}
+          fill="none" stroke={bc} strokeWidth={1.5}
+          strokeDasharray={`${w} ${(w+h)*2}`}
+          animate={{ strokeDashoffset: [0, -(w+h)*2] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }} />
       )}
 
-      {/* Title */}
-      <text
-        textAnchor="middle"
-        dy={isSecondary ? '0.38em' : '0.1em'}
-        fontSize={isRoot ? 12 : isPrimary ? 10 : 9}
-        fontWeight={isRoot ? 700 : isPrimary ? 600 : 500}
-        fontFamily="Inter, system-ui, sans-serif"
-        fill={isRoot ? '#f5e6c8' : isPrimary ? '#e8e8f0' : '#d0d0e0'}
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
-        letterSpacing={isRoot ? 0.5 : 0}
-      >
-        {truncate(node.title, isRoot ? 22 : isPrimary ? 14 : 14)}
-      </text>
+      {/* Root: IdeaGraph label + idea text */}
+      {isRoot && (
+        <>
+          <text x={w/2} y={22} textAnchor="middle"
+            fontSize={11} fontWeight={700}
+            fontFamily="Inter, system-ui, sans-serif"
+            fill="#f5e6c8" letterSpacing={0.3}>
+            {truncate(node.title, 22)}
+          </text>
+          <text x={w/2} y={36} textAnchor="middle"
+            fontSize={7} fontWeight={400}
+            fontFamily="'SF Mono', 'Fira Code', monospace"
+            fill="rgba(200,169,110,0.5)" letterSpacing={1}>
+            IDEA STRUCTURE
+          </text>
+        </>
+      )}
 
-      {/* Insight on hover */}
+      {/* Primary: branch label */}
+      {isPrimary && (
+        <text x={w/2 + 4} y={h/2 + 1} textAnchor="middle" dominantBaseline="middle"
+          fontSize={9} fontWeight={600}
+          fontFamily="Inter, system-ui, sans-serif"
+          fill="#e0e0f0" letterSpacing={0.3}>
+          {node.title}
+        </text>
+      )}
+
+      {/* Secondary: title */}
+      {isSecondary && (
+        <text x={9} y={h/2 + (isHovered ? -3 : 1)} dominantBaseline="middle"
+          fontSize={9} fontWeight={500}
+          fontFamily="Inter, system-ui, sans-serif"
+          fill="#d8d8e8" letterSpacing={0.1}>
+          {truncate(node.title, 16)}
+        </text>
+      )}
+
+      {/* Secondary: insight on hover */}
       {isSecondary && isHovered && node.insight && (
-        <motion.foreignObject x={-80} y={r + 6} width={160} height={40}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
-          <div style={{
-            background: 'rgba(10,10,20,0.92)',
-            border: `1px solid ${bc}55`,
-            borderRadius: 6,
-            padding: '4px 8px',
-            fontSize: 9,
-            fontWeight: 300,
-            fontFamily: 'Inter, sans-serif',
-            color: 'rgba(210,210,230,0.9)',
-            lineHeight: 1.4,
-            textAlign: 'center',
-          }}>
-            {truncate(node.insight, 50)}
-          </div>
-        </motion.foreignObject>
+        <motion.text x={9} y={h/2 + 9} dominantBaseline="middle"
+          fontSize={7} fontWeight={300}
+          fontFamily="Inter, system-ui, sans-serif"
+          fill={`${bc}cc`}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}>
+          {truncate(node.insight, 20)}
+        </motion.text>
       )}
 
-      {/* "+" expand hint */}
-      {isSecondary && isHovered && !isExpanded && !isExpanding && (
-        <motion.circle r={6} cx={r + 2} cy={-r - 2} fill={bc} opacity={0.9}
-          initial={{ scale: 0 }} animate={{ scale: 1 }} />
-      )}
-      {isSecondary && isHovered && !isExpanded && !isExpanding && (
-        <motion.text x={r + 2} y={-r - 2} textAnchor="middle" dominantBaseline="middle"
-          fontSize={9} fontWeight={700} fill="#0a0a0f"
-          initial={{ scale: 0 }} animate={{ scale: 1 }}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}>+</motion.text>
+      {/* Expanded checkmark */}
+      {isExpanded && (
+        <text x={w - 7} y={h - 6} textAnchor="middle"
+          fontSize={7} fill={bc} opacity={0.8}
+          fontFamily="monospace">✓</text>
       )}
     </motion.g>
   );
