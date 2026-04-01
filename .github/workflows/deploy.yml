@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -32,12 +32,8 @@ jobs:
       - name: Build
         run: npm run build:frontend
         env:
-          # Set these in GitHub repo Settings > Variables (not Secrets — they're not sensitive)
-          # VITE_BASE_PATH: '/<your-repo-name>/'  e.g. '/ideagraph/'
-          # VITE_API_URL: your Railway backend URL  e.g. 'https://ideagraph-api.up.railway.app'
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_USE_SEED: ${{ vars.VITE_USE_SEED }}
           VITE_USE_SEED: ${{ vars.VITE_USE_SEED }}
 
       - name: Upload artifact
