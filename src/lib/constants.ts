@@ -1,3 +1,4 @@
+
 import type { StressDimension, BranchType } from './types';
 
 export const STRESS_DIMENSIONS: { id: StressDimension; label: string }[] = [
@@ -9,22 +10,21 @@ export const STRESS_DIMENSIONS: { id: StressDimension; label: string }[] = [
   { id: 'regulation', label: 'Regulation' },
 ];
 
-// Vivid, distinct branch colors — visible on dark background
 export const BRANCH_COLORS: Record<BranchType, string> = {
-  user:         '#60a5fa',  // blue
-  useCases:     '#34d399',  // emerald
-  systemType:   '#f472b6',  // pink
-  value:        '#a78bfa',  // violet
-  risks:        '#f87171',  // red
-  dependencies: '#fbbf24',  // amber
+  user:         '#60a5fa',
+  useCases:     '#34d399',
+  systemType:   '#f472b6',
+  value:        '#a78bfa',
+  risks:        '#f87171',
+  dependencies: '#fbbf24',
 };
 
 export const FORCE_CONFIG = {
-  linkDistanceHierarchical: 120,
-  linkDistanceCausal:       200,
-  chargeStrength:          -350,
-  collisionRadius:          52,
-  alphaDecay:               0.025,
+  linkDistanceHierarchical: 140,
+  linkDistanceCausal:       220,
+  chargeStrength:          -600,
+  collisionRadius:          80,
+  alphaDecay:               0.022,
 } as const;
 
 export const NODE_SIZE = {
@@ -34,7 +34,7 @@ export const NODE_SIZE = {
 } as const;
 
 export const ANIMATION = {
-  nodeEnter: { duration: 0.4, stiffness: 280, damping: 22 },
+  nodeEnter: { duration: 0.4, stiffness: 260, damping: 22 },
   edgeDraw:  600,
   stressTransition: 0.3,
   stagger: 0.06,
