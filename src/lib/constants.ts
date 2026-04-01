@@ -20,21 +20,21 @@ export const BRANCH_COLORS: Record<BranchType, string> = {
 };
 
 export const FORCE_CONFIG = {
-  linkDistanceHierarchical: 140,
-  linkDistanceCausal:       220,
-  chargeStrength:          -600,
-  collisionRadius:          80,
-  alphaDecay:               0.022,
+  linkDistanceHierarchical: 110,
+  linkDistanceCausal:       190,
+  chargeStrength:          -300,
+  collisionRadius:          46,
+  alphaDecay:               0.025,
 } as const;
 
 export const NODE_SIZE = {
-  root:      32,
-  primary:   20,
-  secondary: 15,
+  root:      30,
+  primary:   18,
+  secondary: 13,
 } as const;
 
 export const ANIMATION = {
-  nodeEnter: { duration: 0.4, stiffness: 260, damping: 22 },
+  nodeEnter: { duration: 0.4, stiffness: 280, damping: 22 },
   edgeDraw:  600,
   stressTransition: 0.3,
   stagger: 0.06,
